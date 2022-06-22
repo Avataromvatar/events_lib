@@ -6,13 +6,13 @@ abstract class IEventTreeDTO {
   String get from;
 }
 
-class EventTreeDTO implements IEventTreeDTO {
+class EventTreeDTO<T> implements IEventTreeDTO {
   @override
   final String source;
   @override
   final List<String> path = [];
   @override
-  dynamic data;
+  T data;
   @override
   int count = 0;
   @override

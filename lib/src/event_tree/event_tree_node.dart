@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:events_lib/src/event_tree/event_tree_dto.dart';
 
+///Parallel
+///Event -> Node -> ParallelEventBus -> Event -> OtherNode
+///
 enum EventDirection { up, down, parallel }
 
 typedef EventTreeStreamHandler = dynamic Function(
