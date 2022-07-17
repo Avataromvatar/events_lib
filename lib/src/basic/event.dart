@@ -13,6 +13,12 @@ abstract class IEventPointInfo {
   ///event fullPath = [eventPrefix]/[eventType]@[eventName]
   String get fullEventName;
   bool get isClosed;
+  static String fullEventNameCreate(Type type,
+      {String? prefix, String? eventName}) {
+    String? _eventTypeAndName =
+        eventName != null ? '$type@$eventName' : '$type';
+    return prefix != null ? '$prefix/$_eventTypeAndName' : '$_eventTypeAndName';
+  }
 }
 
 abstract class IEventPoint implements IEventPointInfo {
@@ -130,8 +136,12 @@ abstract class IEventNode {
 ///Особенность менеджера что он настраивает только связи между передатчиками и приемниками и потом не учавствует в их взаимодействии.
 ///Передатчик хранит своих приемников и кидает им сообщение напрямую
 abstract class IEventManager implements IEventNode {
-  IEventTransmitter<T> getTransmitter<T>({String? name});
-  IEventReceiver<T> getReceiver<T>({String? name});
+  List<IEventTransmitter<T>>? getTransmitters<T>(
+      {String? name, String? prefix});
+  List<IEventReceiver<T>>? getReceivers<T>({
+    String? name,
+    String? prefix,
+  });
 }
 
 ///Особенность шины в том что она знает о передатчиках и подписчиках связывает их через себя, становляь единственным подписчиком у передатчика.
@@ -150,9 +160,11 @@ class EventReceiver<T> implements IEventReceiver<T> {
   String? get eventPrefix => _eventPrefix;
   String? get _eventTypeAndName =>
       _eventName != null ? '$eventType@$eventName' : '$eventType';
-  String get fullEventName => _eventPrefix != null
-      ? '$_eventPrefix/$_eventTypeAndName'
-      : '$_eventTypeAndName';
+  String get fullEventName => IEventPointInfo.fullEventNameCreate(eventType,
+      eventName: eventName, prefix: eventPrefix);
+  //  _eventPrefix != null
+  // ? '$_eventPrefix/$_eventTypeAndName'
+  // : '$_eventTypeAndName';
   // bool _hasReceiver = false;
   bool _isPaused = false;
   bool get isPaused => _isPaused;
@@ -268,9 +280,11 @@ class EventTransmitter<T> implements IEventTransmitter<T> {
   String? get eventPrefix => _eventPrefix;
   String? get _eventTypeAndName =>
       _eventName != null ? '$eventType@$eventName' : '$eventType';
-  String get fullEventName => _eventPrefix != null
-      ? '$_eventPrefix/$_eventTypeAndName'
-      : '$_eventTypeAndName';
+  String get fullEventName => IEventPointInfo.fullEventNameCreate(eventType,
+      eventName: eventName, prefix: eventPrefix);
+  //  _eventPrefix != null
+  //     ? '$_eventPrefix/$_eventTypeAndName'
+  //     : '$_eventTypeAndName';
   // bool _hasReceiver = false;
   bool _isClosed = false;
   bool get isClosed => _isClosed;
@@ -391,6 +405,100 @@ class EventTransmitter<T> implements IEventTransmitter<T> {
       _receiversToDelete.add(receiver);
       receiver._transmitterCount(false);
     }
+  }
+}
+
+class EventManager implements IEventManager {
+  String? name;
+  Map<String, List<IEventReceiver>> _receivers = {};
+  Map<String, List<IEventTransmitter>> _transmitters = {};
+
+  EventManager({this.name});
+
+  @override
+  List<String> getEventList({bool needFullPath = true}) {
+    if (needFullPath) return _transmitters.keys.toList();
+
+    List<String> ret = [];
+    _transmitters.forEach((key, value) {
+      if (value.first.eventName != null) {
+        ret.add(value.first.eventName!);
+      }
+    });
+    return ret;
+  }
+
+  @override
+  List<IEventReceiver<T>>? getReceivers<T>({
+    String? name,
+    String? prefix,
+  }) {
+    var str = IEventPointInfo.fullEventNameCreate(T..runtimeType,
+        eventName: name, prefix: prefix);
+    if (_receivers.containsKey(str))
+      return _receivers[str] as List<IEventReceiver<T>>;
+    return null;
+    // throw UnimplementedError();
+  }
+
+  @override
+  List<IEventTransmitter<T>>? getTransmitters<T>(
+      {String? name, String? prefix}) {
+    var str = IEventPointInfo.fullEventNameCreate(T..runtimeType,
+        eventName: name, prefix: prefix);
+    if (_transmitters.containsKey(str))
+      return _transmitters[str] as List<IEventTransmitter<T>>;
+    return null;
+  }
+
+  @override
+  void register({IEventTransmitter? transmitter, IEventReceiver? receiver}) {
+    //regist reciver
+    if (receiver != null) {
+      if (!_receivers.containsKey(receiver.fullEventName)) {
+        _receivers[receiver.fullEventName] =
+            List<IEventReceiver>.empty(growable: true);
+      }
+      _receivers[receiver.fullEventName]!.add(receiver);
+    }
+
+    if (transmitter != null) {
+      if (!_transmitters.containsKey(transmitter.fullEventName)) {
+        _transmitters[transmitter.fullEventName] =
+            List<IEventTransmitter>.empty(growable: true);
+      }
+      _transmitters[transmitter.fullEventName]!.add(transmitter);
+    }
+
+    //regist transmitter
+  }
+
+  void _connectReceiver(IEventReceiver receiver) {
+    var s = receiver.fullEventName;
+    if (_transmitters.containsKey(s)) {
+      for (var i = 0; i < _transmitters[s]!.length; i++) {
+        _transmitters[s]![i].connect(receiver);
+      }
+    }
+  }
+
+  void _connectTransmitter(IEventTransmitter transmitter) {
+    var s = transmitter.fullEventName;
+    if (_receivers.containsKey(s)) {
+      for (var i = 0; i < _receivers[s]!.length; i++) {
+        transmitter.connect(_receivers[s]![i]);
+      }
+    }
+  }
+
+  @override
+  void unregister({IEventTransmitter? transmitter, IEventReceiver? receiver}) {
+    // TODO: implement unregister
+  }
+  @override
+  bool send<T>(T data, {String? eventName}) {
+    // TODO: implement send
+    throw UnimplementedError();
   }
 }
 
