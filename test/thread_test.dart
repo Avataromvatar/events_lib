@@ -3,15 +3,13 @@ import 'dart:async';
 import 'package:events_lib/src/thread/thread.dart';
 
 Future<void> main() async {
-  var thread = IsolateWorker<String, String>((stream, emit, exit) async {
-    await for (var item in stream) {
-      print('From main thread: $item');
-      emit.call(item.toUpperCase());
-      if (item == 'exit') {
-        exit.call(data: item.toUpperCase());
-      }
-    }
-  }, '');
+  var thread =
+      IsolateWorker<String, String>(_worker, initMsg: "Init", onExit: ({name}) {
+    print("Tread $name EXIT");
+  }, name: "alalall");
+  thread.stream.listen((event) {
+    print('From Isolate $event');
+  });
   int count = 0;
   Timer.periodic(Duration(seconds: 1), (timer) {
     count++;
@@ -22,4 +20,14 @@ Future<void> main() async {
   });
   await Future.delayed(Duration(seconds: 12));
   print('Exit');
+}
+
+Future<void> _worker(Stream<String> fromExternal, StreamSink<String> toExternal,
+    String? initMsg) async {
+  int c = 0;
+  await for (var item in fromExternal) {
+    toExternal.add(item.toUpperCase());
+    c++;
+    if (c == 3) break;
+  }
 }
