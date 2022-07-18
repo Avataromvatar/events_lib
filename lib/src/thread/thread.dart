@@ -1,10 +1,24 @@
 import 'dart:async';
-
 import 'dart:isolate';
 
 class _IsolateWorker<T, R> {
-  Stream<R> stream;
+  ///по которому мы получаем данные
+  late StreamController<R> receiver = StreamController<R>.broadcast();
+  late StreamController<T> transmitter = StreamController<T>.broadcast();
   ReceivePort _receivePort = ReceivePort();
+  Function(Stream<R> fromExternal, StreamSink<T> toExternal) worker;
+  _IsolateWorker(this.worker) {}
+}
+
+class IsolateWorker<T, R> implements StreamSink<R> {
+  StreamController<T> _transmitter = StreamController<T>.broadcast();
+  late _IsolateWorker<T, R> _isolateWorker;
+  IsolateWorker(
+      Function(Stream<R> fromExternal, StreamSink<T> toExternal) worker) {
+    _isolateWorker = _IsolateWorker(worker);
+
+    Isolate.spawn<_IsolateWorker>(_worker, w);
+  }
 }
 
 class IsolateWorker<T, R> implements StreamSink<R> {
@@ -79,12 +93,12 @@ class IsolateWorker<T, R> implements StreamSink<R> {
   Future get done => _completer.future;
 }
 
-void _worker(SendPort p) async {
+void _worker(_IsolateWorker isoWorker) async {
   // Send a SendPort to the main isolate so that it can send Data  to
   // this isolate.
   print('WORKER: INIT');
   final commandPort = ReceivePort();
-  p.send(commandPort.sendPort);
+  // p.send(commandPort.sendPort);
   print('WORKER: SEND PORT');
   // StreamController<R> controller = StreamController<R>();
   // commandPort.listen((message) {
