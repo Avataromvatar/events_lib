@@ -9,13 +9,13 @@ class _IsolateWorkerPing {
   bool fromInner = false;
 }
 
-class _IsolateWorkerData<T, R> {
+class _IsolateWorkerData<T, R, D> {
   SendPort tx;
-  T? initData;
+  D? initData;
   StreamController<R> receiver = StreamController.broadcast();
   StreamController<T> transmitter = StreamController.broadcast();
   Future<void> Function(
-      Stream<R> fromExternal, StreamSink<T> toExternal, T? initMsg) worker;
+      Stream<R> fromExternal, StreamSink<T> toExternal, D? initMsg) worker;
   _IsolateWorkerData(
       {required this.tx, required this.initData, required this.worker});
   Future<void> run() async {
@@ -23,7 +23,7 @@ class _IsolateWorkerData<T, R> {
   }
 }
 
-class IsolateWorker<T, R> implements StreamSink<R> {
+class IsolateWorker<T, R, D> implements StreamSink<R> {
   Isolate? _isolate;
   ReceivePort _receivePort = ReceivePort();
   SendPort? _sendToIsolate;
@@ -35,19 +35,20 @@ class IsolateWorker<T, R> implements StreamSink<R> {
   bool _pingFlag = false;
   _IsolateWorkerPing _ping = _IsolateWorkerPing();
   //
-  late _IsolateWorkerData<T, R> _isolateWorkerData;
+  late _IsolateWorkerData<T, R, D> _isolateWorkerData;
   Function({String? name})? onExit;
   bool _isExit = false;
   bool get isExit => _isExit;
   String? name;
   IsolateWorker(
-      Future<void> Function(
-              Stream<R> fromExternal, StreamSink<T> toExternal, T? initMsg)
-          worker,
-      {T? initMsg,
-      this.onExit,
-      this.name}) {
-    _isolateWorkerData = _IsolateWorkerData<T, R>(
+    Future<void> Function(
+            Stream<R> fromExternal, StreamSink<T> toExternal, D? initMsg)
+        worker, {
+    D? initMsg,
+    this.onExit,
+    this.name,
+  }) {
+    _isolateWorkerData = _IsolateWorkerData<T, R, D>(
         initData: initMsg, tx: _receivePort.sendPort, worker: worker);
 
     ///Подписываемся на соообщения из изолята
@@ -69,14 +70,20 @@ class IsolateWorker<T, R> implements StreamSink<R> {
     });
 
     ///
-    Isolate.spawn<_IsolateWorkerData<T, R>>(_isolateWorker, _isolateWorkerData,
-            debugName: name) //<T, R>
+    Isolate.spawn<_IsolateWorkerData<T, R, D>>(
+            _isolateWorker, _isolateWorkerData,
+            debugName: name, paused: true) //<T, R>
         .then((value) {
       _isolate = value;
 
       _tmr = Timer.periodic(Duration(milliseconds: _timePing), _onTimerPing);
     });
   }
+  void run({D? initData}) {
+    _isolateWorkerData.initData = initData;
+    _isolate?.resume(Capability());
+  }
+
   void _onTimerPing(Timer tmr) {
     if (_pingFlag) {
       if (!_ping.fromInner) {
@@ -120,7 +127,7 @@ class IsolateWorker<T, R> implements StreamSink<R> {
   Future get done => _completer.future;
 }
 
-void _isolateWorker<T, R>(_IsolateWorkerData<T, R> initData) async {
+void _isolateWorker<T, R, D>(_IsolateWorkerData<T, R, D> initData) async {
   // Send a SendPort to the main isolate so that it can send Data  to
   // this isolate.
   print('WORKER: INIT: ${T..toString()} ${R..toString()}');
@@ -140,142 +147,3 @@ void _isolateWorker<T, R>(_IsolateWorkerData<T, R> initData) async {
   await initData.run();
   initData.tx.send(_IsolateWorkerDone());
 }
-// void _isolateWorker<T, R>(_IsolateWorkerData<T, R> initData) async {
-//   // Send a SendPort to the main isolate so that it can send Data  to
-//   // this isolate.
-//   print('WORKER: INIT');
-//   final commandPort = ReceivePort();
-//   initData.tx.send(commandPort.sendPort);
-//   StreamController<R> receiver = StreamController<R>.broadcast();
-//   StreamController<T> transmitter = StreamController<T>.broadcast();
-//   commandPort.listen((message) {
-//     if (message is R) {
-//       receiver.add(message);
-//     } else {
-//       if (message is _IsolateWorkerPing) {
-//         initData.tx.send(message..fromInner = true);
-//       }
-//     }
-//   });
-//   transmitter.stream.listen((event) {
-//     if (event is T) {
-//       initData.tx.send(event);
-//     }
-//   });
-
-//   await initData.worker.call(receiver.stream, transmitter, initData.initData);
-// }
-
-
-// class _IsolateWorker<T, R> {
-//   ///по которому мы получаем данные
-//   late StreamController<R> receiver = StreamController<R>.broadcast();
-//   late StreamController<T> transmitter = StreamController<T>.broadcast();
-//   ReceivePort _receivePort = ReceivePort();
-//   Function(Stream<R> fromExternal, StreamSink<T> toExternal) worker;
-//   _IsolateWorker(this.worker) {}
-// }
-
-// class IsolateWorker<T, R> implements StreamSink<R> {
-//   StreamController<T> _transmitter = StreamController<T>.broadcast();
-//   late _IsolateWorker<T, R> _isolateWorker;
-//   Isolate? _isolate;
-//   IsolateWorker(
-//       Function(Stream<R> fromExternal, StreamSink<T> toExternal) worker) {
-//     _isolateWorker = _IsolateWorker(worker);
-
-//     Isolate.spawn<_IsolateWorker>(_worker, _isolateWorker)
-//         .then((value) => _isolate = value);
-//   }
-// }
-
-// class IsolateWorker<T, R> implements StreamSink<R> {
-//   StreamController<T> _transmitter = StreamController<T>.broadcast();
-//   Stream<T> get streamFromWorker => _transmitter.stream;
-//   // StreamController<R> _receiver = StreamController<R>.broadcast();
-//   bool _isWork = false;
-//   bool get isWork => _isWork;
-
-//   ReceivePort _receivePort = ReceivePort();
-
-//   ///send to isolate
-//   SendPort? _sender;
-//   late final Function(Stream<R> stream, void Function(T data) emit,
-//       Function({R? data}) exit) _userWorker;
-//   late StreamSubscription _listener;
-//   late Isolate _isolate;
-
-//   ///worker function be call always then new data came in [_receiver].
-//   ///[exit] function call exit from Isolate then [worker] end operation
-//   IsolateWorker(
-//       Function(
-//               Stream<R> stream, Function(T data) emit, Function({R? data}) exit)
-//           worker,
-//       R? initData) {
-//     _userWorker = worker;
-
-//     // _receiver.stream.listen((event) {
-//     //   _sender?.send(event);
-//     // });
-//     Isolate.spawn<SendPort>(_worker, _receivePort.sendPort).then((value) {
-//       _isolate = value;
-//       _listener = _receivePort.listen((message) {
-//         if (_sender == null && message is SendPort) {
-//           _sender = message;
-//         } else {
-//           _transmitter.add(message);
-//         }
-//       }, onDone: () {
-//         _close();
-//       }, onError: (e) {
-//         _close();
-//       });
-//     });
-//   }
-
-//   void _close() {
-//     _isolate.kill();
-//   }
-
-//   @override
-//   void add(R event) {
-//     // TODO: implement add
-//   }
-//   @override
-//   void addError(Object error, [StackTrace? stackTrace]) {
-//     // TODO: implement addError
-//   }
-//   @override
-//   Future addStream(Stream<R> stream) {
-//     // TODO: implement addStream
-//     throw UnimplementedError();
-//   }
-
-//   @override
-//   Future close() {
-//     // TODO: implement close
-//     throw UnimplementedError();
-//   }
-
-//   Completer _completer = Completer();
-//   Future get done => _completer.future;
-// }
-
-// void _worker(_IsolateWorker isoWorker) async {
-//   // Send a SendPort to the main isolate so that it can send Data  to
-//   // this isolate.
-//   print('WORKER: INIT');
-//   final commandPort = ReceivePort();
-//   // p.send(commandPort.sendPort);
-//   print('WORKER: SEND PORT');
-//   // StreamController<R> controller = StreamController<R>();
-//   // commandPort.listen((message) {
-//   //   controller.add(message);
-//   // });
-
-//   // _userWorker(controller.stream, (data) {
-//   //   p.send(data);
-//   // }, ({data}) {});
-//   // print('WORKER: DONE');
-//   // _close();
-// }

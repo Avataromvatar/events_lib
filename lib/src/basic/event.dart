@@ -7,14 +7,17 @@ abstract class IEventPointInfo {
   ///event name
   String? get eventName;
 
-  ///for IEventBus
-  String? get eventPrefix;
+  /// if (eventName!=null) 'eventType@eventName'  else eventType
+  String get topic;
 
-  ///event fullPath = [eventPrefix]/[eventType]@[eventName]
-  String get fullEventName;
+  /// prefix/topic
+  String get path;
+
+  ///for IEventBus
+  String? get prefix;
+
   bool get isClosed;
-  static String fullEventNameCreate(Type type,
-      {String? prefix, String? eventName}) {
+  static String pathCreate(Type type, {String? prefix, String? eventName}) {
     String? _eventTypeAndName =
         eventName != null ? '$type@$eventName' : '$type';
     return prefix != null ? '$prefix/$_eventTypeAndName' : '$_eventTypeAndName';
@@ -122,6 +125,17 @@ abstract class IEventReceiver<T>
 
   ///then transmitter connect to reciver add +1 (true) if disconnect -1 (false)
   void _transmitterCount(bool add);
+
+  factory IEventReceiver({String? eventName, IEventNode? eventNode}) {
+    var et = EventReceiver<T>();
+    et._eventName = eventName;
+    if (eventNode != null) {
+      eventNode.register(receiver: et);
+    } else {
+      //TODO: connect to global EventManager
+    }
+    return et;
+  }
 }
 
 abstract class IEventNode {
@@ -157,11 +171,11 @@ class EventReceiver<T> implements IEventReceiver<T> {
   String? _eventName;
   String? get eventName => _eventName;
   String? _eventPrefix;
-  String? get eventPrefix => _eventPrefix;
-  String? get _eventTypeAndName =>
+  String? get prefix => _eventPrefix;
+  String get topic =>
       _eventName != null ? '$eventType@$eventName' : '$eventType';
-  String get fullEventName => IEventPointInfo.fullEventNameCreate(eventType,
-      eventName: eventName, prefix: eventPrefix);
+  String get path => IEventPointInfo.pathCreate(eventType,
+      eventName: eventName, prefix: prefix);
   //  _eventPrefix != null
   // ? '$_eventPrefix/$_eventTypeAndName'
   // : '$_eventTypeAndName';
@@ -277,11 +291,11 @@ class EventTransmitter<T> implements IEventTransmitter<T> {
   String? _eventName;
   String? get eventName => _eventName;
   String? _eventPrefix;
-  String? get eventPrefix => _eventPrefix;
-  String? get _eventTypeAndName =>
+  String? get prefix => _eventPrefix;
+  String get topic =>
       _eventName != null ? '$eventType@$eventName' : '$eventType';
-  String get fullEventName => IEventPointInfo.fullEventNameCreate(eventType,
-      eventName: eventName, prefix: eventPrefix);
+  String get path => IEventPointInfo.pathCreate(eventType,
+      eventName: eventName, prefix: prefix);
   //  _eventPrefix != null
   //     ? '$_eventPrefix/$_eventTypeAndName'
   //     : '$_eventTypeAndName';
@@ -372,7 +386,11 @@ class EventTransmitter<T> implements IEventTransmitter<T> {
 
     await Future.forEach<IEventReceiver<T>>(_receivers, ((element) {
       // if(!_receiversToDelete.contains(element))
-      element._streamController.add(event);
+      if (!element._streamController.isClosed) {
+        element._streamController.add(event);
+      } else {
+        disconnect(element);
+      }
     }));
     _isBusy = false;
     // _disconnect();
@@ -433,7 +451,7 @@ class EventManager implements IEventManager {
     String? name,
     String? prefix,
   }) {
-    var str = IEventPointInfo.fullEventNameCreate(T..runtimeType,
+    var str = IEventPointInfo.pathCreate(T..runtimeType,
         eventName: name, prefix: prefix);
     if (_receivers.containsKey(str))
       return _receivers[str] as List<IEventReceiver<T>>;
@@ -444,7 +462,7 @@ class EventManager implements IEventManager {
   @override
   List<IEventTransmitter<T>>? getTransmitters<T>(
       {String? name, String? prefix}) {
-    var str = IEventPointInfo.fullEventNameCreate(T..runtimeType,
+    var str = IEventPointInfo.pathCreate(T..runtimeType,
         eventName: name, prefix: prefix);
     if (_transmitters.containsKey(str))
       return _transmitters[str] as List<IEventTransmitter<T>>;
@@ -455,26 +473,27 @@ class EventManager implements IEventManager {
   void register({IEventTransmitter? transmitter, IEventReceiver? receiver}) {
     //regist reciver
     if (receiver != null) {
-      if (!_receivers.containsKey(receiver.fullEventName)) {
-        _receivers[receiver.fullEventName] =
-            List<IEventReceiver>.empty(growable: true);
+      if (!_receivers.containsKey(receiver.path)) {
+        _receivers[receiver.path] = List<IEventReceiver>.empty(growable: true);
       }
-      _receivers[receiver.fullEventName]!.add(receiver);
+      _receivers[receiver.path]!.add(receiver);
+      _connectReceiver(receiver);
     }
 
     if (transmitter != null) {
-      if (!_transmitters.containsKey(transmitter.fullEventName)) {
-        _transmitters[transmitter.fullEventName] =
+      if (!_transmitters.containsKey(transmitter.path)) {
+        _transmitters[transmitter.path] =
             List<IEventTransmitter>.empty(growable: true);
       }
-      _transmitters[transmitter.fullEventName]!.add(transmitter);
+      _transmitters[transmitter.path]!.add(transmitter);
+      _connectTransmitter(transmitter);
     }
 
     //regist transmitter
   }
 
   void _connectReceiver(IEventReceiver receiver) {
-    var s = receiver.fullEventName;
+    var s = receiver.path;
     if (_transmitters.containsKey(s)) {
       for (var i = 0; i < _transmitters[s]!.length; i++) {
         _transmitters[s]![i].connect(receiver);
@@ -483,7 +502,7 @@ class EventManager implements IEventManager {
   }
 
   void _connectTransmitter(IEventTransmitter transmitter) {
-    var s = transmitter.fullEventName;
+    var s = transmitter.path;
     if (_receivers.containsKey(s)) {
       for (var i = 0; i < _receivers[s]!.length; i++) {
         transmitter.connect(_receivers[s]![i]);
@@ -495,10 +514,34 @@ class EventManager implements IEventManager {
   void unregister({IEventTransmitter? transmitter, IEventReceiver? receiver}) {
     // TODO: implement unregister
   }
+  void _disconnectReceiver(IEventReceiver receiver) {
+    var s = receiver.path;
+    if (_transmitters.containsKey(s)) {
+      for (var i = 0; i < _transmitters[s]!.length; i++) {
+        _transmitters[s]![i].disconnect(receiver);
+      }
+    }
+  }
+
+  void _disconnectTransmitter(IEventTransmitter transmitter) {
+    var s = transmitter.path;
+    if (_receivers.containsKey(s)) {
+      for (var i = 0; i < _receivers[s]!.length; i++) {
+        transmitter.disconnect(_receivers[s]![i]);
+      }
+    }
+  }
+
   @override
   bool send<T>(T data, {String? eventName}) {
-    // TODO: implement send
-    throw UnimplementedError();
+    var p = IEventPointInfo.pathCreate(T, eventName: eventName);
+    if (_receivers.containsKey(p)) {
+      _receivers[p]!.forEach((element) {
+        element._streamController.add(data);
+      });
+      return true;
+    }
+    return false;
   }
 }
 
@@ -506,9 +549,4 @@ class Test {
   String body = 'dfsdf';
 }
 
-void main() {
-  EventTransmitter<Test> es = EventTransmitter<Test>();
-  EventTransmitter es1 = EventTransmitter();
-  print(es.eventType);
-  print(es1.eventType);
-}
+void main() {}

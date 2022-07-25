@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:events_lib/src/thread/thread.dart';
 
 Future<void> main() async {
-  var thread =
-      IsolateWorker<String, String>(_worker, initMsg: "Init", onExit: ({name}) {
+  var thread = IsolateWorker<String, String, dynamic>(_worker, initMsg: "Init",
+      onExit: ({name}) {
     print("Tread $name EXIT");
   }, name: "alalall");
   thread.stream.listen((event) {
@@ -23,7 +23,7 @@ Future<void> main() async {
 }
 
 Future<void> _worker(Stream<String> fromExternal, StreamSink<String> toExternal,
-    String? initMsg) async {
+    dynamic initMsg) async {
   int c = 0;
   await for (var item in fromExternal) {
     toExternal.add(item.toUpperCase());

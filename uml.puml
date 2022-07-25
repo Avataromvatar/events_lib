@@ -1,0 +1,366 @@
+@startuml
+set namespaceSeparator ::
+
+abstract class "events_lib::src::basic::event.dart::IEventPointInfo" {
+  +Type eventType
+  +String? eventName
+  +String? eventPrefix
+  +String fullEventName
+  +bool isClosed
+  {static} +String fullEventNameCreate()
+}
+
+abstract class "events_lib::src::basic::event.dart::IEventPoint" {
+  +bool isInitialized
+  +bool initialize()
+  +IEventTransmitter<T>? transmitter()
+  +IEventReceiver<T>? receiver()
+}
+
+"events_lib::src::basic::event.dart::IEventPointInfo" <|-- "events_lib::src::basic::event.dart::IEventPoint"
+
+abstract class "events_lib::src::basic::event.dart::IEventTransmitter" {
+  +bool hasReceiver
+  +void Function(void Function(T)) onReceiver
+  +Future<void> connect()
+  +Future<void> disconnect()
+  +Future<dynamic> removeStream()
+}
+
+"events_lib::src::basic::event.dart::IEventTransmitter" o-- "null::void Function(void Function(T))"
+"dart::async::StreamSink" <|-- "events_lib::src::basic::event.dart::IEventTransmitter"
+"events_lib::src::basic::event.dart::IEventPointInfo" <|-- "events_lib::src::basic::event.dart::IEventTransmitter"
+
+abstract class "events_lib::src::basic::event.dart::IEventReceiver" {
+  -StreamController<T> _streamController
+  +Stream<T> stream
+  +bool hasTransmitter
+  +IEventReceiver<T> listen()
+  {static} +IEventReceiver<A> listenOf()
+  -void _transmitterCount()
+}
+
+"events_lib::src::basic::event.dart::IEventReceiver" o-- "dart::async::StreamController<T>"
+"events_lib::src::basic::event.dart::IEventReceiver" o-- "dart::async::Stream<T>"
+"dart::async::StreamSubscription" <|-- "events_lib::src::basic::event.dart::IEventReceiver"
+"events_lib::src::basic::event.dart::IEventPointInfo" <|-- "events_lib::src::basic::event.dart::IEventReceiver"
+
+abstract class "events_lib::src::basic::event.dart::IEventNode" {
+  +void register()
+  +void unregister()
+  +bool send()
+  +List<String> getEventList()
+}
+
+abstract class "events_lib::src::basic::event.dart::IEventManager" {
+  +List<IEventTransmitter<T>>? getTransmitters()
+  +List<IEventReceiver<T>>? getReceivers()
+}
+
+"events_lib::src::basic::event.dart::IEventNode" <|-- "events_lib::src::basic::event.dart::IEventManager"
+
+abstract class "events_lib::src::basic::event.dart::IEventBus" {
+  +String name
+}
+
+"events_lib::src::basic::event.dart::IEventNode" <|-- "events_lib::src::basic::event.dart::IEventBus"
+
+class "events_lib::src::basic::event.dart::EventReceiver" {
+  -int _count
+  -String? _eventName
+  -String? _eventPrefix
+  -bool _isPaused
+  -bool _isClosed
+  -bool _isInitialize
+  -bool _asFutereOn
+  -bool? _cancelOnError
+  -StreamController<T> _streamController
+  -StreamSubscription<T>? _streamSubscription
+  -void Function(T)? _handleData
+  -void Function()? _handleDone
+  -Function? _handleError
+  -Completer<dynamic> _completer
+  +Type eventType
+  +String? eventName
+  +String? eventPrefix
+  -String? _eventTypeAndName
+  +String fullEventName
+  +bool isPaused
+  +bool isClosed
+  +Stream<T> stream
+  +bool hasTransmitter
+  -void _transmitterCount()
+  +void onData()
+  +void onDone()
+  +void onError()
+  +IEventReceiver<T> listen()
+  -Future<void> _close()
+  -void _initialize()
+  +Future<void> cancel()
+  +Future<E> asFuture()
+  +void pause()
+  +void resume()
+}
+
+"events_lib::src::basic::event.dart::EventReceiver" o-- "dart::async::StreamController<T>"
+"events_lib::src::basic::event.dart::EventReceiver" o-- "dart::async::StreamSubscription<T>"
+"events_lib::src::basic::event.dart::EventReceiver" o-- "null::void Function(T)"
+"events_lib::src::basic::event.dart::EventReceiver" o-- "null::void Function()"
+"events_lib::src::basic::event.dart::EventReceiver" o-- "dart::async::Completer<dynamic>"
+"events_lib::src::basic::event.dart::EventReceiver" o-- "dart::async::Stream<T>"
+"events_lib::src::basic::event.dart::IEventReceiver" <|-- "events_lib::src::basic::event.dart::EventReceiver"
+
+class "events_lib::src::basic::event.dart::EventTransmitter" {
+  -String? _eventName
+  -String? _eventPrefix
+  -bool _isClosed
+  -bool _isBusy
+  -bool _isDeletingRecivers
+  -bool _isInitialize
+  -List<IEventReceiver<T>> _receivers
+  -List<IEventReceiver<T>> _receiversToDelete
+  -Map<Stream<T>, StreamSubscription<T>> _addStreams
+  -Completer<dynamic> _completer
+  -void Function(void Function(T))? _onReceiver
+  +Type eventType
+  +String? eventName
+  +String? eventPrefix
+  -String? _eventTypeAndName
+  +String fullEventName
+  +bool isClosed
+  +bool hasReceiver
+  +void Function(void Function(T)) onReceiver
+  +Future<dynamic> done
+  +void add()
+  +void addError()
+  +Future<dynamic> addStream()
+  +Future<dynamic> removeStream()
+  +Future<dynamic> close()
+  -Future<void> _send()
+  -void _disconnectAllWhatNeeds()
+  +Future<void> connect()
+  +Future<void> disconnect()
+}
+
+"events_lib::src::basic::event.dart::EventTransmitter" o-- "dart::async::Completer<dynamic>"
+"events_lib::src::basic::event.dart::EventTransmitter" o-- "null::void Function(void Function(T))"
+"events_lib::src::basic::event.dart::IEventTransmitter" <|-- "events_lib::src::basic::event.dart::EventTransmitter"
+
+class "events_lib::src::basic::event.dart::EventManager" {
+  +String? name
+  -Map<String, List<IEventReceiver<dynamic>>> _receivers
+  -Map<String, List<IEventTransmitter<dynamic>>> _transmitters
+  +List<String> getEventList()
+  +List<IEventReceiver<T>>? getReceivers()
+  +List<IEventTransmitter<T>>? getTransmitters()
+  +void register()
+  -void _connectReceiver()
+  -void _connectTransmitter()
+  +void unregister()
+  +bool send()
+}
+
+"events_lib::src::basic::event.dart::IEventManager" <|-- "events_lib::src::basic::event.dart::EventManager"
+
+class "events_lib::src::basic::event.dart::Test" {
+  +String body
+}
+
+abstract class "events_lib::src::event_tree::event_tree_dto.dart::IEventTreeDTO" {
+  +String source
+  +List<String> path
+  +int count
+  +dynamic data
+  +String from
+}
+
+class "events_lib::src::event_tree::event_tree_dto.dart::EventTreeDTO" {
+  +String source
+  +List<String> path
+  +T data
+  +int count
+  +String from
+}
+
+"events_lib::src::event_tree::event_tree_dto.dart::IEventTreeDTO" <|-- "events_lib::src::event_tree::event_tree_dto.dart::EventTreeDTO"
+
+abstract class "events_lib::src::event_tree::event_tree_node.dart::IEventTreeNode" {
+  +String nameNode
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto}) defaultHandler
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto}) upHandler
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto}) downHandler
+  +void Function(String, EventDirection, dynamic, {IEventTreeDTO dto}) parallelHandler
+}
+
+"events_lib::src::event_tree::event_tree_node.dart::IEventTreeNode" o-- "events_lib::src::event_tree::event_tree_node.dart::dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto})"
+"events_lib::src::event_tree::event_tree_node.dart::IEventTreeNode" o-- "events_lib::src::event_tree::event_tree_node.dart::void Function(String, EventDirection, dynamic, {IEventTreeDTO dto})"
+
+class "events_lib::src::event_tree::event_tree_node.dart::EventTreeNode" {
+  -StreamController<EventTreeDTO<dynamic>> _upStream
+  -StreamController<EventTreeDTO<dynamic>> _downStream
+  -StreamController<EventTreeDTO<dynamic>> _parallelStream
+  +String nameNode
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto})? defaultHandler
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto})? upHandler
+  +dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto})? downHandler
+  +void Function(String, EventDirection, dynamic, {IEventTreeDTO dto})? parallelHandler
+  -Map<Stream<dynamic>, StreamSubscription<dynamic>> _upStreamConnect
+  -Map<Stream<dynamic>, StreamSubscription<dynamic>> _downStreamConnect
+  -Map<Stream<dynamic>, StreamSubscription<dynamic>> _parallelStreamConnect
+  +void sendUp()
+  +void sendDown()
+  +void send()
+  +void connectNode()
+  +void disconnectNode()
+  -void _connectStream()
+  -void _disconnectStream()
+}
+
+"events_lib::src::event_tree::event_tree_node.dart::EventTreeNode" o-- "dart::async::StreamController<EventTreeDTO<dynamic>>"
+"events_lib::src::event_tree::event_tree_node.dart::EventTreeNode" o-- "events_lib::src::event_tree::event_tree_node.dart::dynamic Function(String, EventDirection, dynamic, {IEventTreeDTO dto})"
+"events_lib::src::event_tree::event_tree_node.dart::EventTreeNode" o-- "events_lib::src::event_tree::event_tree_node.dart::void Function(String, EventDirection, dynamic, {IEventTreeDTO dto})"
+"events_lib::src::event_tree::event_tree_node.dart::IEventTreeNode" <|-- "events_lib::src::event_tree::event_tree_node.dart::EventTreeNode"
+
+class "events_lib::src::event_tree::event_tree_node.dart::EventDirection" {
+  +int index
+  {static} +List<EventDirection> values
+  {static} +EventDirection up
+  {static} +EventDirection down
+  {static} +EventDirection parallel
+}
+
+"events_lib::src::event_tree::event_tree_node.dart::EventDirection" o-- "events_lib::src::event_tree::event_tree_node.dart::EventDirection"
+"dart::core::Enum" <|-- "events_lib::src::event_tree::event_tree_node.dart::EventDirection"
+
+class "events_lib::src::events_lib_base.dart::Awesome" {
+  +bool isAwesome
+}
+
+abstract class "events_lib::src::event_stream_bus::ieventbus.dart::IEventBus" {
+  +List<String> topics
+  +StreamController<T>? addTopic()
+  +EventSubcriber<T> listenTopic()
+  +bool setEventNode()
+}
+
+"events_lib::src::event_stream_bus::event_node.dart::IEventNodeInfo" <|-- "events_lib::src::event_stream_bus::ieventbus.dart::IEventBus"
+
+class "events_lib::src::event_stream_bus::ieventbus.dart::EventBusMixin" {
+  -IEventNode? __eventNode
+  +String name
+  +List<String> topics
+  +StreamController<T>? addTopic()
+  +EventSubcriber<T> listenTopic()
+  +bool setEventNode()
+}
+
+"events_lib::src::event_stream_bus::ieventbus.dart::EventBusMixin" o-- "events_lib::src::event_stream_bus::event_node.dart::IEventNode"
+"events_lib::src::event_stream_bus::ieventbus.dart::IEventBus" <|-- "events_lib::src::event_stream_bus::ieventbus.dart::EventBusMixin"
+
+abstract class "events_lib::src::event_stream_bus::event_node.dart::IEventNodeInfo" {
+  +String name
+  +List<String> topics
+}
+
+abstract class "events_lib::src::event_stream_bus::event_node.dart::IEventNode" {
+  +bool containsTopic()
+  +bool addEventChannel()
+  +EventChannel<T>? getEventChannel()
+}
+
+"events_lib::src::event_stream_bus::event_node.dart::IEventNodeInfo" <|-- "events_lib::src::event_stream_bus::event_node.dart::IEventNode"
+
+class "events_lib::src::event_stream_bus::event_node.dart::EventNodeGlobal" {
+  {static} +EventNodeGlobal instance
+  -Map<String, EventChannel<dynamic>> _channels
+  +String name
+  +List<String> topics
+  +bool containsTopic()
+  +bool addEventChannel()
+  +EventChannel<T>? getEventChannel()
+}
+
+"events_lib::src::event_stream_bus::event_node.dart::EventNodeGlobal" o-- "events_lib::src::event_stream_bus::event_node.dart::EventNodeGlobal"
+"events_lib::src::event_stream_bus::event_node.dart::IEventNode" <|-- "events_lib::src::event_stream_bus::event_node.dart::EventNodeGlobal"
+
+class "events_lib::src::event_stream_bus::event_channel.dart::EventSubcriber" {
+  -bool _toDelete
+  -String? _name
+  -void Function()? _cancel
+  -void Function(String, T, {String? publisherName})? _fun
+  +void Function()? onDone
+  +void cancel()
+}
+
+"events_lib::src::event_stream_bus::event_channel.dart::EventSubcriber" o-- "null::void Function()"
+"events_lib::src::event_stream_bus::event_channel.dart::EventSubcriber" o-- "null::void Function(String, T, {String publisherName})"
+
+class "events_lib::src::event_stream_bus::event_channel.dart::EventChannel" {
+  +String topic
+  -Map<StreamController<T>, StreamSubscription<T>> _publishers
+  -Map<int, EventSubcriber<T>> _subcribers
+  +void addPublisher()
+  +EventSubcriber<dynamic> listen()
+  -void _channelWorker()
+}
+
+class "events_lib::src::thread::thread.dart::_IsolateWorkerDone" {
+  +bool done
+}
+
+class "events_lib::src::thread::thread.dart::_IsolateWorkerPing" {
+  +bool fromInner
+}
+
+class "events_lib::src::thread::thread.dart::_IsolateWorkerData" {
+  +SendPort tx
+  +T? initData
+  +StreamController<R> receiver
+  +StreamController<T> transmitter
+  +Future<void> Function(Stream<R>, StreamSink<T>, T?) worker
+  +Future<void> run()
+}
+
+"events_lib::src::thread::thread.dart::_IsolateWorkerData" o-- "dart::isolate::SendPort"
+"events_lib::src::thread::thread.dart::_IsolateWorkerData" o-- "dart::async::StreamController<R>"
+"events_lib::src::thread::thread.dart::_IsolateWorkerData" o-- "dart::async::StreamController<T>"
+"events_lib::src::thread::thread.dart::_IsolateWorkerData" o-- "null::Future<void> Function(Stream<R>, StreamSink<T>, T)"
+
+class "events_lib::src::thread::thread.dart::IsolateWorker" {
+  -Isolate? _isolate
+  -ReceivePort _receivePort
+  -SendPort? _sendToIsolate
+  -StreamController<T> _transmitter
+  -Timer? _tmr
+  -int _timePing
+  -bool _pingFlag
+  -_IsolateWorkerPing _ping
+  -_IsolateWorkerData<T, R> _isolateWorkerData
+  +dynamic Function({String? name})? onExit
+  -bool _isExit
+  +String? name
+  -Completer<dynamic> _completer
+  +Stream<T> stream
+  +bool isExit
+  +Future<dynamic> done
+  -void _onTimerPing()
+  +void add()
+  +void addError()
+  +Future<dynamic> addStream()
+  +Future<dynamic> close()
+}
+
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::isolate::Isolate"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::isolate::ReceivePort"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::isolate::SendPort"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::async::StreamController<T>"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::async::Timer"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "events_lib::src::thread::thread.dart::_IsolateWorkerPing"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "events_lib::src::thread::thread.dart::_IsolateWorkerData<T, R>"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "null::dynamic Function({String name})"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::async::Completer<dynamic>"
+"events_lib::src::thread::thread.dart::IsolateWorker" o-- "dart::async::Stream<T>"
+"dart::async::StreamSink" <|-- "events_lib::src::thread::thread.dart::IsolateWorker"
+
+
+@enduml
